@@ -26,9 +26,19 @@ class Line<Datum, X, Y> {
       this.curve: LineCurves.monotone,
       this.marker: const MarkerOptions(),
       this.markerFn,
+      this.infinite: false,
+      this.infiniteMin: false,
+      this.infiniteMax: false,
       this.legend})
       : this.xAxis = xAxis ?? new ChartAxis<X>(),
         this.yAxis = yAxis ?? new ChartAxis<Y>();
+
+  /// Interpolates line from edge to edge without any padding
+  final bool infinite;
+
+  final bool infiniteMin;
+
+  final bool infiniteMax;
 
   List<Datum> data;
 
@@ -64,13 +74,40 @@ class Line<Datum, X, Y> {
 
     final xSpan = xAxis.span ?? xAxis.spanFn(xValuesCasted);
     final ySpan = yAxis.span ?? yAxis.spanFn(yValuesCasted);
+    final points = _generatePoints(xSpan, ySpan);
+    _interpolateToInfinite(points);
 
     return new LineChartDrawable(
-      points: _generatePoints(xSpan, ySpan),
+      points: points,
       stroke: stroke,
       fill: fill,
       curve: curve,
     );
+  }
+
+  void _interpolateToInfinite(List<LinePointDrawable> points) {
+    if (!infinite && !infiniteMin && !infiniteMax) {
+      return;
+    }
+
+    final firstPoint = points.reduce((p1, p2) => p1.x <= p2.x ? p1 : p2);
+    if (infinite || infiniteMin) {
+      // todo: figure the angle from first two
+      points.insert(0, firstPoint.copyWith(x: 0.0));
+    }
+
+    if (infinite || infiniteMax) {
+      final lastPoint = points.reduce((p1, p2) => p1.x >= p2.x ? p1 : p2);
+      final secondLast =
+        points[points.length -2];//.reduce((p1, p2) => p1.x >= p2.x ? p1 : p2);
+      print("last ${lastPoint.x} ${secondLast.y}");
+      final normalStepSize = 1.0 - firstPoint.x - (1.0 - lastPoint.x);
+      final endStepSize = 1.0 - lastPoint.x;
+      final lastYChange = lastPoint.y - secondLast.y;
+      final intY = lastPoint.y + (lastYChange * endStepSize / normalStepSize);
+      //final intY = lastPoint.y - secondLast.y
+      points.add(lastPoint.copyWith(x: 1.0, value: intY));
+    }
   }
 
   List<LinePointDrawable> _generatePoints(
